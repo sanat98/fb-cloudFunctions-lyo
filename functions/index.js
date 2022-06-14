@@ -138,7 +138,7 @@ exports.startFatProcessWaitFunction = functions.firestore
       // set start time
       admin.firestore().collection("A_companyData").doc("Arizon12345").collection("fatDataProcessTrigers").doc("waitFunctions").collection("waitFunctionTrigers")
       .doc(context.params.documentId).update({"startTimeTemp": startTime}).then((writeResult) => {
-        functions.logger.log("start time recorded2:", writeResult); ///
+        functions.logger.log("start time recorded2:", writeResult); /// this has no use for now but important for logs.
       });
           functions.logger.log("process started 3");
           // TimeOut start
@@ -209,19 +209,100 @@ exports.startFatProcessWaitFunction = functions.firestore
 
 
 // read value of Fat
-function fatDataGetter(fatId, tableId) {
-  const data = admin.firestore()
-      .collection("A_companyData")
-      .doc("Arizon12345")
-      .collection("fatData")
-      .doc(fatId)
-      .collection("table")
-      .doc(tableId)
-      .get()
-      .then((doc) => {
-        // console.log('Got rule: ' + doc.data().name);
-        functions.logger.log("fatdataGetter fun:", doc.data());
-        return doc.data();
+// function fatDataGetter(fatId, tableId) {
+//   const data = admin.firestore()
+//       .collection("A_companyData")
+//       .doc("Arizon12345")
+//       .collection("fatData")
+//       .doc(fatId)
+//       .collection("table")
+//       .doc(tableId)
+//       .get()
+//       .then((doc) => {
+//         functions.logger.log("fatdataGetter fun:", doc.data());
+//         return doc.data();
+//       });
+//   return data;
+// }
+
+// ////////////////////////////////////////////////////////Condition Check fun-/////////////////////////////////////////////
+
+exports.startFatConditionCheckFunction = functions.firestore
+    .document("/A_companyData/Arizon12345/fatDataProcessTrigers/conditionCheckFunction/conditionCheckFunctionTrigers/{documentId}").onCreate((snap, context) => {
+      const startTime = firestore.Timestamp.now(); // getting time
+      // get the current value
+      // const activeProcessInfo = snap.data();
+      let fatData = {};
+     /// let processIsRunning = true;
+      functions.logger.log("activeProcessInfo1:", "id:", context.params.documentId, "data t:", snap.data().fatDataId, "table id:", snap.data().tableId); //test for snap.data(.tableId) >> if it fails call the doc
+      // set start time
+      admin.firestore().collection("A_companyData").doc("Arizon12345").collection("fatDataProcessTrigers").doc("conditionCheckFunction").collection("conditionCheckFunctionTrigers")
+      .doc(context.params.documentId).update({"startTimeTemp": startTime}).then((writeResult) => {
+        functions.logger.log("start time recorded2:", writeResult); /// this has no use for now but important for logs.
       });
-  return data;
-}
+          functions.logger.log("process started 3");
+          fatDataGetter(snap.data().fatDataId, snap.data().tableId).then((data) => {
+              return new Promise((resolve, reject) => {
+                  fatData = {...data};
+                  functions.logger.log("fatData second4 :", fatData.acceptance)
+                  resolve();
+              })
+
+      .then(() => {
+        return new Promise((resolve, reject) => {
+            functions.logger.log("fatData second5 :", fatData.acceptanceValue)
+            admin.firestore().collection("A_companyData")
+            .doc("Arizon12345")
+            .collection("liveData2")
+            .doc("Temp-probe1")
+            .get()
+            .then((doc) => {
+                  functions.logger.log("get value:", doc.data().value, "startTime:", startTime.seconds, "fatData:", fatData.condition);
+                
+                    const docRef = admin.firestore().collection("A_companyData")
+                    .doc("Arizon12345")
+                    .collection("fatData")
+                    .doc(snap.data().fatDataId)
+                    .collection("table")
+                    .doc(snap.data().tableId);
+
+                    if(fatData.condition == 'equal' && fatData.acceptanceValue == doc.data().value) {
+                    // admin.firestore().collection("A_companyData")
+                    // .doc("Arizon12345")
+                    // .collection("fatData")
+                    // .doc(snap.data().fatDataId)
+                    // .collection("table")
+                    // .doc(snap.data().tableId)
+                    docRef.update({
+                      "observation": " Condition Check has passed with value = " + doc.data().value,
+                    });
+                    }
+                    else if(fatData.condition == 'less' && fatData.acceptanceValue < doc.data().value){
+                     docRef.update({
+                      "observation": " Condition Check has passed with value < " + doc.data().value,
+                    });
+                    }
+                    else if(fatData.condition == 'great' && fatData.acceptanceValue > doc.data().value){  //keyword check in doc "great" need to change carefully and update here also if change happens
+                     docRef.update({
+                      "observation": " Condition Check has passed with value > " + doc.data().value,
+                    });
+                    }
+                    else {
+                     docRef.update({
+                      "observation": " Condition Check has FAILED: value:-" + doc.data().value + " / " + fatData.acceptanceValue,
+                    });
+                    }
+                    functions.logger.log("fatData:if: ", fatData.condition);
+                    resolve();
+                });
+
+      }).then(() => {
+        functions.logger.log("cloudFunction ends: ");
+        return null;
+      });
+    });
+    });
+    functions.logger.log("cloudFunction finishes: ");
+    return 0;
+    });
+    
