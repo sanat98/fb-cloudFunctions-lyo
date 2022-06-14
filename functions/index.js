@@ -13,7 +13,7 @@ exports.helloWorld = functions.https.onRequest((request, response) => {
 });
 
 exports.startFatProcessTimePeriod = functions.firestore
-    .document("/A_companyData/Arizon12345/fatDataProcessTrigers/{documentId}").onCreate((snap, context) => {
+    .document("/A_companyData/Arizon12345/fatDataProcessTrigers/timePeriodFunction/timePeriodFunctionTrigers/{documentId}").onCreate((snap, context) => {
       const startTime = firestore.Timestamp.now(); // getting time
       // get the current value
       // const activeProcessInfo = snap.data();
@@ -21,7 +21,7 @@ exports.startFatProcessTimePeriod = functions.firestore
       let processIsRunning = true;
       functions.logger.log("activeProcessInfo1:", "id:", context.params.documentId, "data t:", snap.data().fatDataId, "table id:", snap.data().tableId); //test for snap.data(.tableId) >> if it fails call the doc
       // set start time
-      admin.firestore().collection("A_companyData").doc("Arizon12345").collection("fatDataProcessTrigers")
+      admin.firestore().collection("A_companyData").doc("Arizon12345").collection("fatDataProcessTrigers").doc("timePeriodFunction").collection("timePeriodFunctionTrigers")
       .doc(context.params.documentId).update({"startTimeTemp": startTime}).then((writeResult) => {
         functions.logger.log("start time recorded2:", writeResult); ///
       });
@@ -32,7 +32,7 @@ exports.startFatProcessTimePeriod = functions.firestore
                 admin.firestore().collection("A_companyData")
                 .doc("Arizon12345")
                 .collection("liveData2")
-                .doc("Temp-probe1")
+                .doc(data.sensor) //////
                     .onSnapshot((doc) => {
                     if (processIsRunning) {
                     functions.logger.log("time up", data.acceptance);
@@ -44,6 +44,8 @@ exports.startFatProcessTimePeriod = functions.firestore
                     .collection("table")
                     .doc(snap.data().tableId).update({
                       "observation": "Process has copleted in " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
+                      "dev" : doc.data().value - data.stop,
+                      "confirm": (doc.data().value - data.stop) == 0 ? "Yes" : "No",
                     });
                 functions.logger.log("fatData:setTimeoutSuccessful: ", data);
                 processIsRunning = false;
@@ -65,10 +67,10 @@ exports.startFatProcessTimePeriod = functions.firestore
             admin.firestore().collection("A_companyData")
             .doc("Arizon12345")
             .collection("liveData2")
-            .doc("Temp-probe1")
+            .doc(data.sensor) ///
                 .onSnapshot((doc) => {
                   const timeCurrent = firestore.Timestamp.now();
-                  const timeIntervalFor = fatData.acceptance;// acceptance is waittingtime
+                  const timeIntervalFor = fatData.acceptanceValue;// acceptanceValue is waittingtime
                   functions.logger.log("onSnapshot:timeInterval:", timeCurrent.seconds - startTime.seconds < timeIntervalFor*60,
                       "startTime:", startTime.seconds, "timeIntervalFor:", timeIntervalFor, "fatData:", fatData, "fatData.time:", fatData.acceptance);// acceptance is waittingtime
                   if ((doc.data().value === fatData.stop || doc.data().value < fatData.stop) && processIsRunning ||
@@ -80,6 +82,8 @@ exports.startFatProcessTimePeriod = functions.firestore
                     .collection("table")
                     .doc(snap.data().tableId).update({
                       "observation": "Process has copleted in " + (timeCurrent.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
+                      "dev" : Math.abs(doc.data().value - fatData.stop),
+                      "confirm": (doc.data().value - fatData.stop) == 0 ? "Yes" : "No",
                     });
                     functions.logger.log("fatData:if: ", fatData);
                     processIsRunning = false;
@@ -147,23 +151,60 @@ exports.startFatProcessWaitFunction = functions.firestore
                 admin.firestore().collection("A_companyData")
                 .doc("Arizon12345")
                 .collection("liveData2")
-                .doc("Temp-probe1")
+                .doc(data.sensor) ////
                     .onSnapshot((doc) => {
                     if (processIsRunning) {
                     functions.logger.log("time up", data.waitingTime);
                     const timeCurrent2 = firestore.Timestamp.now();
-                    admin.firestore().collection("A_companyData")
+                    const docRef = admin.firestore().collection("A_companyData")
                     .doc("Arizon12345")
                     .collection("fatData")
                     .doc(snap.data().fatDataId)
                     .collection("table")
-                    .doc(snap.data().tableId).update({
+                    .doc(snap.data().tableId);
+                    if(data.condition == 'equal' && data.acceptanceValue == doc.data().value) {
+                    docRef.update({
                       "observation": "Wait function process has copleted in " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
+                      "dev" : doc.data().value - data.acceptanceValue, // stop is acceptanceValue in wait function
+                      "confirm": (doc.data().value - data.acceptanceValue) == 0 ? "Yes" : "No",
                     });
-                functions.logger.log("fatData:setTimeoutSuccessful: ", data);
-                processIsRunning = false;
-                return null;
+                    functions.logger.log("fatData:setTimeoutSuccessful: ", data);
+                    processIsRunning = false;
+                    return null;
                     }
+                    else if(data.condition == 'less' && data.acceptanceValue < doc.data().value) {
+                        docRef.update({
+                          "observation": "Wait function process has copleted in " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
+                          "dev" : data.acceptanceValue - doc.data().value,
+                          "confirm": doc.data().value < data.acceptanceValue ? "Yes" : "No",
+                        });
+                    functions.logger.log("fatData:setTimeoutSuccessful: ", data);
+                    processIsRunning = false;
+                    return null;
+                    }
+                    else if(data.condition == 'great' && data.acceptanceValue < doc.data().value) {
+                        docRef.update({
+                          "observation": "Wait function process has copleted in " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
+                          "dev" : doc.data().value - data.acceptanceValue,
+                          "confirm": doc.data().value > data.acceptanceValue ? "Yes" : "No",
+                        });
+                    functions.logger.log("fatData:setTimeoutSuccessful: ", data);
+                    processIsRunning = false;
+                    return null;
+                    }
+                    else {
+                        docRef.update({
+                          "observation": "Wait function process has copleted in " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
+                          "dev" : Math.abs(doc.data().value - data.acceptanceValue), ////
+                          "confirm": "No",
+                        });
+                    functions.logger.log("fatData:setTimeoutSuccessful: ", data);
+                    processIsRunning = false;
+                    return null;
+                    }
+                    
+                    
+                   }
                 });
               }, data.waitingTime*60*1000); // This is important
               // timeOut close
@@ -267,29 +308,32 @@ exports.startFatConditionCheckFunction = functions.firestore
                     .doc(snap.data().tableId);
 
                     if(fatData.condition == 'equal' && fatData.acceptanceValue == doc.data().value) {
-                    // admin.firestore().collection("A_companyData")
-                    // .doc("Arizon12345")
-                    // .collection("fatData")
-                    // .doc(snap.data().fatDataId)
-                    // .collection("table")
-                    // .doc(snap.data().tableId)
                     docRef.update({
                       "observation": " Condition Check has passed with value = " + doc.data().value,
+                      "dev" : doc.data().value - fatData.acceptanceValue,
+                      "confirm": "Yes",
+
                     });
                     }
                     else if(fatData.condition == 'less' && fatData.acceptanceValue < doc.data().value){
                      docRef.update({
                       "observation": " Condition Check has passed with value < " + doc.data().value,
+                      "dev" : fatData.acceptanceValue - doc.data().value,
+                      "confirm": "Yes",
                     });
                     }
                     else if(fatData.condition == 'great' && fatData.acceptanceValue > doc.data().value){  //keyword check in doc "great" need to change carefully and update here also if change happens
                      docRef.update({
                       "observation": " Condition Check has passed with value > " + doc.data().value,
+                      "dev" : doc.data().value - fatData.acceptanceValue,
+                      "confirm": "Yes",
                     });
                     }
                     else {
                      docRef.update({
-                      "observation": " Condition Check has FAILED: value:-" + doc.data().value + " / " + fatData.acceptanceValue,
+                      "observation": " Condition Check has FAILED: value: " + doc.data().value + " / " + fatData.acceptanceValue,
+                      "dev" : Math.abs(doc.data().value - fatData.acceptanceValue), // tested
+                      "confirm": "No",
                     });
                     }
                     functions.logger.log("fatData:if: ", fatData.condition);
