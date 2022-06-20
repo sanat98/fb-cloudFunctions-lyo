@@ -35,7 +35,7 @@ exports.startFatProcessTimePeriod = functions.firestore
                 .doc(data.sensor) //////
                     .onSnapshot((doc) => {
                     if (processIsRunning) {
-                    functions.logger.log("time up", data.acceptance);
+                    functions.logger.log("time up", data.acceptanceValue);
                     const timeCurrent2 = firestore.Timestamp.now();
                     admin.firestore().collection("A_companyData")
                     .doc("Arizon12345")
@@ -52,17 +52,17 @@ exports.startFatProcessTimePeriod = functions.firestore
                 return null;
                     }
                 });
-              }, data.acceptance*60*1000);
+              }, data.acceptanceValue*60*1000);
               // timeOut close
               return new Promise((resolve, reject) => {
                   fatData = {...data};
-                  functions.logger.log("fatData second4 :", fatData.acceptance)
+                  functions.logger.log("fatData second4 :", fatData.acceptanceValue)
                   resolve();
               })
 
       .then(() => {
         return new Promise((resolve, reject) => {
-            functions.logger.log("fatData second5 :", fatData.acceptance)
+            functions.logger.log("fatData second5 :", fatData.acceptanceValue)
          
             admin.firestore().collection("A_companyData")
             .doc("Arizon12345")
@@ -72,7 +72,7 @@ exports.startFatProcessTimePeriod = functions.firestore
                   const timeCurrent = firestore.Timestamp.now();
                   const timeIntervalFor = fatData.acceptanceValue;// acceptanceValue is waittingtime
                   functions.logger.log("onSnapshot:timeInterval:", timeCurrent.seconds - startTime.seconds < timeIntervalFor*60,
-                      "startTime:", startTime.seconds, "timeIntervalFor:", timeIntervalFor, "fatData:", fatData, "fatData.time:", fatData.acceptance);// acceptance is waittingtime
+                      "startTime:", startTime.seconds, "timeIntervalFor:", timeIntervalFor, "fatData:", fatData, "fatData.time:", fatData.acceptanceValue);// acceptance is waittingtime
                   if ((doc.data().value === fatData.stop || doc.data().value < fatData.stop) && processIsRunning ||
                   (timeCurrent.seconds - startTime.seconds > timeIntervalFor*60 && processIsRunning)) { // this condition works
                     admin.firestore().collection("A_companyData")
