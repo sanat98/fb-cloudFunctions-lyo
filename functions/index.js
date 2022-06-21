@@ -13,47 +13,18 @@ exports.helloWorld = functions.https.onRequest((request, response) => {
 });
 
 exports.startFatProcessTimePeriod = functions.firestore
-    .document("/A_companyData/Arizon12345/fatDataProcessTrigers/timePeriodFunction/timePeriodFunctionTrigers/{documentId}").onCreate((snap, context) => {
-      const startTime = firestore.Timestamp.now(); // getting time
+    .document("/A_fatTriggers/time-period-fun/time-period-fun-triggers/{documentId}").onCreate((snap, context) => {
+      let startTime = firestore.Timestamp.now(); // getting time
+      const startTimeOfProcess = firestore.Timestamp.now(); // getting time at start of process
       // get the current value
       // const activeProcessInfo = snap.data();
       let fatData = {};
       let processIsRunning = true;
-      functions.logger.log("activeProcessInfo1:", "id:", context.params.documentId, "data t:", snap.data().fatDataId, "table id:", snap.data().tableId); //test for snap.data(.tableId) >> if it fails call the doc
-      // set start time
-      admin.firestore().collection("A_companyData").doc("Arizon12345").collection("fatDataProcessTrigers").doc("timePeriodFunction").collection("timePeriodFunctionTrigers")
-      .doc(context.params.documentId).update({"startTimeTemp": startTime}).then((writeResult) => {
-        functions.logger.log("start time recorded2:", writeResult); ///
-      });
+      functions.logger.log("activeProcessInfo1:", "id:", context.params.documentId, "data fatId:", snap.data().fat_id, "table id:", snap.data().table_id); //test for snap.data(.tableId) >> if it fails call the doc
+     
           functions.logger.log("process started 3");
-          // TimeOut start
-          fatDataGetter(snap.data().fatDataId, snap.data().tableId).then((data) => {
-              setTimeout(() => {
-                admin.firestore().collection("A_companyData")
-                .doc("Arizon12345")
-                .collection("liveData2")
-                .doc(data.sensor) //////
-                    .onSnapshot((doc) => {
-                    if (processIsRunning) {
-                    functions.logger.log("time up", data.acceptanceValue);
-                    const timeCurrent2 = firestore.Timestamp.now();
-                    admin.firestore().collection("A_companyData")
-                    .doc("Arizon12345")
-                    .collection("fatData")
-                    .doc(snap.data().fatDataId)
-                    .collection("table")
-                    .doc(snap.data().tableId).update({
-                      "observation": "Process has copleted in " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
-                      "dev" : doc.data().value - data.stop,
-                      "confirm": (doc.data().value - data.stop) == 0 ? "Yes" : "No",
-                    });
-                functions.logger.log("fatData:setTimeoutSuccessful: ", data);
-                processIsRunning = false;
-                return null;
-                    }
-                });
-              }, data.acceptanceValue*60*1000);
-              // timeOut close
+        
+          fatDataGetter( snap.data().company_id ,snap.data().fat_id, snap.data().table_id).then((data) => {
               return new Promise((resolve, reject) => {
                   fatData = {...data};
                   functions.logger.log("fatData second4 :", fatData.acceptanceValue)
@@ -63,9 +34,9 @@ exports.startFatProcessTimePeriod = functions.firestore
       .then(() => {
         return new Promise((resolve, reject) => {
             functions.logger.log("fatData second5 :", fatData.acceptanceValue)
-         
+            let flagCross = false;
             admin.firestore().collection("A_companyData")
-            .doc("Arizon12345")
+            .doc(snap.data().company_id)
             .collection("liveData2")
             .doc(data.sensor) ///
                 .onSnapshot((doc) => {
@@ -73,32 +44,55 @@ exports.startFatProcessTimePeriod = functions.firestore
                   const timeIntervalFor = fatData.acceptanceValue;// acceptanceValue is waittingtime
                   functions.logger.log("onSnapshot:timeInterval:", timeCurrent.seconds - startTime.seconds < timeIntervalFor*60,
                       "startTime:", startTime.seconds, "timeIntervalFor:", timeIntervalFor, "fatData:", fatData, "fatData.time:", fatData.acceptanceValue);// acceptance is waittingtime
-                  if ((doc.data().value === fatData.stop || doc.data().value < fatData.stop) && processIsRunning ||
-                  (timeCurrent.seconds - startTime.seconds > timeIntervalFor*60 && processIsRunning)) { // this condition works
+
+                  if(doc.data().value <= fatData.start) { 
+                    if(!flagCross) {
+                      startTime = firestore.Timestamp.now();
+                    }
+                    flagCross = true;
+                    
+                    //// as limit has time calculation limit has reached . now have to record that time
+                      
+                  if ((doc.data().value === fatData.stop || doc.data().value < fatData.stop) && processIsRunning) { // this condition works
                     admin.firestore().collection("A_companyData")
-                    .doc("Arizon12345")
+                    .doc(snap.data().company_id)
                     .collection("fatData")
-                    .doc(snap.data().fatDataId)
+                    .doc(snap.data().fat_id)
                     .collection("table")
-                    .doc(snap.data().tableId).update({
+                    .doc(snap.data().table_id).update({
                       "observation": "Process has copleted in " + (timeCurrent.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
-                      "dev" : Math.abs(doc.data().value - fatData.stop),
-                      "confirm": (doc.data().value - fatData.stop) == 0 ? "Yes" : "No",
+                      "dev" : "Value: " + Math.abs(doc.data().value - fatData.stop) + "Total time: " + (timeCurrent.seconds - startTimeOfProcess.seconds),
+                      "confirm": ((timeCurrent.seconds - startTime.seconds)) - (fatData.acceptanceValue*60) <= 0 ? "Yes" : "No",
                     });
                     functions.logger.log("fatData:if: ", fatData);
                     processIsRunning = false;
                     resolve();
                   } else if (processIsRunning) {
                     admin.firestore().collection("A_companyData")
-                    .doc("Arizon12345")
+                    .doc(snap.data().company_id)
                     .collection("fatData")
-                    .doc(snap.data().fatDataId)
+                    .doc(snap.data().fat_id)
                     .collection("table")
-                    .doc(snap.data().tableId).update({
-                      "observation": "process is running:- " + "Time remains: " + (timeIntervalFor*60 - (timeCurrent.seconds - startTime.seconds)) + " sec" + " Sensor value: " + doc.data().value,
+                    .doc(snap.data().table_id).update({
+                      "observation": "process is running:- " + "Time lapsed after reaching limit: " + (timeCurrent.seconds - startTime.seconds) + " sec" + " and Sensor value: " + doc.data().value,
                     });
                     functions.logger.log("fatData:else: ", fatData);
                   }
+
+                }
+                else {
+                  flagCross = false;
+                  admin.firestore().collection("A_companyData")
+                  .doc(snap.data().company_id)
+                  .collection("fatData")
+                  .doc(snap.data().fat_id)
+                  .collection("table")
+                  .doc(snap.data().table_id).update({
+                    "observation": "process is running:- " + " start limit has not reached. " + "Sensor value: " + doc.data().value,
+                  });
+                  functions.logger.log("fatData:else outer: ", fatData);
+
+                }
                 });
 
       }).then(() => {
@@ -112,10 +106,10 @@ exports.startFatProcessTimePeriod = functions.firestore
 
 
 // read value of Fat
-function fatDataGetter(fatId, tableId) {
+function fatDataGetter(companyId , fatId, tableId) {
   const data = admin.firestore()
       .collection("A_companyData")
-      .doc("Arizon12345")
+      .doc(companyId)
       .collection("fatData")
       .doc(fatId)
       .collection("table")
