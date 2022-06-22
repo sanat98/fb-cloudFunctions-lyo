@@ -61,7 +61,7 @@ exports.startFatProcessTimePeriod = functions.firestore
                     .collection("table")
                     .doc(snap.data().table_id).update({
                       "observation": "Process has copleted in " + (timeCurrent.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
-                      "dev" : "Value: " + Math.abs(doc.data().value - fatData.stop) + "Total time: " + (timeCurrent.seconds - startTimeOfProcess.seconds),
+                      "dev" : "Value: " + Math.abs(doc.data().value - fatData.stop) + " and Total time: " + (timeCurrent.seconds - startTimeOfProcess.seconds),
                       "confirm": ((timeCurrent.seconds - startTime.seconds)) - (fatData.acceptanceValue*60) <= 0 ? "Yes" : "No",
                     });
                     functions.logger.log("fatData:if: ", fatData);
@@ -126,24 +126,24 @@ function fatDataGetter(companyId , fatId, tableId) {
 // //////////////////////////////////////////////////-Wait Function-////////////////////////////////////////////////////////
 
 exports.startFatProcessWaitFunction = functions.firestore
-    .document("/A_companyData/Arizon12345/fatDataProcessTrigers/waitFunctions/waitFunctionTrigers/{documentId}").onCreate((snap, context) => {
+    .document("/A_fatTriggers/wait-function/wait-fun-triggers/{documentId}").onCreate((snap, context) => {
       const startTime = firestore.Timestamp.now(); // getting time
       // get the current value
       // const activeProcessInfo = snap.data();
       let fatData = {};
       let processIsRunning = true;
-      functions.logger.log("activeProcessInfo1:", "id:", context.params.documentId, "data t:", snap.data().fatDataId, "table id:", snap.data().tableId); //test for snap.data(.tableId) >> if it fails call the doc
+      functions.logger.log("activeProcessInfo1:", "id:", context.params.documentId, "data fat:", snap.data().fat_id, "table id:", snap.data().table_id); //test for snap.data(.tableId) >> if it fails call the doc
       // set start time
-      admin.firestore().collection("A_companyData").doc("Arizon12345").collection("fatDataProcessTrigers").doc("waitFunctions").collection("waitFunctionTrigers")
-      .doc(context.params.documentId).update({"startTimeTemp": startTime}).then((writeResult) => {
-        functions.logger.log("start time recorded2:", writeResult); /// this has no use for now but important for logs.
-      });
+      // admin.firestore().collection("A_companyData").doc("Arizon12345").collection("fatDataProcessTrigers").doc("waitFunctions").collection("waitFunctionTrigers")
+      // .doc(context.params.documentId).update({"startTimeTemp": startTime}).then((writeResult) => {
+      //   functions.logger.log("start time recorded2:", writeResult); /// this has no use for now but important for logs.
+      // });
           functions.logger.log("process started 3");
           // TimeOut start
-          fatDataGetter(snap.data().fatDataId, snap.data().tableId).then((data) => {
+          fatDataGetter(snap.data().company_id ,snap.data().fat_id, snap.data().table_id).then((data) => {
               setTimeout(() => {
                 admin.firestore().collection("A_companyData")
-                .doc("Arizon12345")
+                .doc(snap.data().company_id)
                 .collection("liveData2")
                 .doc(data.sensor) ////
                     .onSnapshot((doc) => {
@@ -151,11 +151,11 @@ exports.startFatProcessWaitFunction = functions.firestore
                     functions.logger.log("time up", data.waitingTime);
                     const timeCurrent2 = firestore.Timestamp.now();
                     const docRef = admin.firestore().collection("A_companyData")
-                    .doc("Arizon12345")
+                    .doc(snap.data().company_id)
                     .collection("fatData")
-                    .doc(snap.data().fatDataId)
+                    .doc(snap.data().fat_id)
                     .collection("table")
-                    .doc(snap.data().tableId);
+                    .doc(snap.data().table_id);
                     if(data.condition == 'equal' && data.acceptanceValue == doc.data().value) {
                     docRef.update({
                       "observation": "Wait function process has copleted in " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
@@ -210,23 +210,23 @@ exports.startFatProcessWaitFunction = functions.firestore
 
       .then(() => {
         return new Promise((resolve, reject) => {
-            functions.logger.log("fatData second5 :", fatData.acceptance)
+            functions.logger.log("fatData second5 :", fatData.acceptance, "fatdData.sensor: ", fatData.sensor)
          
             admin.firestore().collection("A_companyData")
-            .doc("Arizon12345")
+            .doc(snap.data().company_id)
             .collection("liveData2")
-            .doc("Temp-probe1")
+            .doc(fatData.sensor)
                 .onSnapshot((doc) => {
                   const timeCurrent2 = firestore.Timestamp.now();
                   functions.logger.log("onSnapshot:timeInterval:", timeCurrent2.seconds - startTime.seconds,
                       "startTime:", startTime.seconds, "fatData:", fatData, "fatData.time:", fatData.waitingTime);
                     if(processIsRunning) {
                     admin.firestore().collection("A_companyData")
-                    .doc("Arizon12345")
+                    .doc(snap.data().company_id)
                     .collection("fatData")
-                    .doc(snap.data().fatDataId)
+                    .doc(snap.data().fat_id)
                     .collection("table")
-                    .doc(snap.data().tableId).update({
+                    .doc(snap.data().table_id).update({
                       "observation": "Wait function process is running, time lapsed: " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " current value = " + doc.data().value,
                     });
                     functions.logger.log("fatData:if: ", fatData);
@@ -263,23 +263,23 @@ exports.startFatProcessWaitFunction = functions.firestore
 // ////////////////////////////////////////////////////////Condition Check fun-/////////////////////////////////////////////
 
 exports.startFatConditionCheckFunction = functions.firestore
-    .document("/A_companyData/Arizon12345/fatDataProcessTrigers/conditionCheckFunction/conditionCheckFunctionTrigers/{documentId}").onCreate((snap, context) => {
+    .document("/A_fatTriggers/condition-check-fun/condition-check-fun-triggers/{documentId}").onCreate((snap, context) => {
       const startTime = firestore.Timestamp.now(); // getting time
       // get the current value
       // const activeProcessInfo = snap.data();
       let fatData = {};
      /// let processIsRunning = true;
-      functions.logger.log("activeProcessInfo1:", "id:", context.params.documentId, "data t:", snap.data().fatDataId, "table id:", snap.data().tableId); //test for snap.data(.tableId) >> if it fails call the doc
+      functions.logger.log("activeProcessInfo1:", "id:", context.params.documentId, "data t:", snap.data().fat_id, "table id:", snap.data().table_id); //test for snap.data(.tableId) >> if it fails call the doc
       // set start time
-      admin.firestore().collection("A_companyData").doc("Arizon12345").collection("fatDataProcessTrigers").doc("conditionCheckFunction").collection("conditionCheckFunctionTrigers")
-      .doc(context.params.documentId).update({"startTimeTemp": startTime}).then((writeResult) => {
-        functions.logger.log("start time recorded2:", writeResult); /// this has no use for now but important for logs.
-      });
+      // admin.firestore().collection("A_companyData").doc(snap.data().company_id).collection("fatDataProcessTrigers").doc("conditionCheckFunction").collection("conditionCheckFunctionTrigers")
+      // .doc(context.params.documentId).update({"startTimeTemp": startTime}).then((writeResult) => {
+      //   functions.logger.log("start time recorded2:", writeResult); /// this has no use for now but important for logs.
+      // });
           functions.logger.log("process started 3");
-          fatDataGetter(snap.data().fatDataId, snap.data().tableId).then((data) => {
+          fatDataGetter(snap.data().company_id, snap.data().fat_id, snap.data().table_id).then((data) => {
               return new Promise((resolve, reject) => {
                   fatData = {...data};
-                  functions.logger.log("fatData second4 :", fatData.acceptance)
+                  functions.logger.log("fatData second4 :", fatData.acceptanceValue)
                   resolve();
               })
 
@@ -287,23 +287,23 @@ exports.startFatConditionCheckFunction = functions.firestore
         return new Promise((resolve, reject) => {
             functions.logger.log("fatData second5 :", fatData.acceptanceValue)
             admin.firestore().collection("A_companyData")
-            .doc("Arizon12345")
+            .doc(snap.data().company_id)
             .collection("liveData2")
-            .doc("Temp-probe1")
+            .doc(fatData.sensor)
             .get()
             .then((doc) => {
-                  functions.logger.log("get value:", doc.data().value, "startTime:", startTime.seconds, "fatData:", fatData.condition);
+                  functions.logger.log("get value:", doc.data().value, "startTime:", startTime.seconds, "fatData condition:", fatData.condition);
                 
                     const docRef = admin.firestore().collection("A_companyData")
-                    .doc("Arizon12345")
+                    .doc(snap.data().company_id)
                     .collection("fatData")
-                    .doc(snap.data().fatDataId)
+                    .doc(snap.data().fat_id)
                     .collection("table")
-                    .doc(snap.data().tableId);
+                    .doc(snap.data().table_id);
 
                     if(fatData.condition == 'equal' && fatData.acceptanceValue == doc.data().value) {
                     docRef.update({
-                      "observation": " Condition Check has passed with value = " + doc.data().value,
+                      "observation": " Condition Check has passed " + " given value: " + fatData.acceptanceValue + " = " + " sensor value: " + doc.data().value,
                       "dev" : doc.data().value - fatData.acceptanceValue,
                       "confirm": "Yes",
 
@@ -311,14 +311,14 @@ exports.startFatConditionCheckFunction = functions.firestore
                     }
                     else if(fatData.condition == 'less' && fatData.acceptanceValue < doc.data().value){
                      docRef.update({
-                      "observation": " Condition Check has passed with value < " + doc.data().value,
+                      "observation": " Condition Check has passed " + " given value: " + fatData.acceptanceValue + " < " + " sensor value: " + doc.data().value,
                       "dev" : fatData.acceptanceValue - doc.data().value,
                       "confirm": "Yes",
                     });
                     }
                     else if(fatData.condition == 'great' && fatData.acceptanceValue > doc.data().value){  //keyword check in doc "great" need to change carefully and update here also if change happens
                      docRef.update({
-                      "observation": " Condition Check has passed with value > " + doc.data().value,
+                      "observation": " Condition Check has passed " + " given value: " + fatData.acceptanceValue + " > " + " sensor value: " + doc.data().value,
                       "dev" : doc.data().value - fatData.acceptanceValue,
                       "confirm": "Yes",
                     });
