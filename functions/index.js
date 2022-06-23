@@ -20,11 +20,11 @@ exports.startFatProcessTimePeriod = functions.firestore
       // const activeProcessInfo = snap.data();
       let fatData = {};
       let processIsRunning = true;
-      functions.logger.log("activeProcessInfo1:", "id:", context.params.documentId, "data fatId:", snap.data().fat_id, "table id:", snap.data().table_id); //test for snap.data(.tableId) >> if it fails call the doc
+      functions.logger.log("activeProcessInfo1:", "id:", context.params.documentId, "reportId: ", snap.data().fat_report_id, "data fatId:", snap.data().fat_id, "table id:", snap.data().table_id); //test for snap.data(.tableId) >> if it fails call the doc
      
           functions.logger.log("process started 3");
         
-          fatDataGetter( snap.data().company_id ,snap.data().fat_id, snap.data().table_id).then((data) => {
+          fatDataGetter( snap.data().company_id , snap.data().fat_report_id ,snap.data().fat_id, snap.data().table_id).then((data) => {
               return new Promise((resolve, reject) => {
                   fatData = {...data};
                   functions.logger.log("fatData second4 :", fatData.acceptanceValue)
@@ -38,7 +38,7 @@ exports.startFatProcessTimePeriod = functions.firestore
             admin.firestore().collection("A_companyData")
             .doc(snap.data().company_id)
             .collection("liveData2")
-            .doc(data.sensor) ///
+            .doc(fatData.sensor) ///
                 .onSnapshot((doc) => {
                   const timeCurrent = firestore.Timestamp.now();
                   const timeIntervalFor = fatData.acceptanceValue;// acceptanceValue is waittingtime
@@ -56,6 +56,8 @@ exports.startFatProcessTimePeriod = functions.firestore
                   if ((doc.data().value === fatData.stop || doc.data().value < fatData.stop) && processIsRunning) { // this condition works
                     admin.firestore().collection("A_companyData")
                     .doc(snap.data().company_id)
+                    .collection("fatReportData")
+                    .doc(snap.data().fat_report_id)
                     .collection("fatData")
                     .doc(snap.data().fat_id)
                     .collection("table")
@@ -70,6 +72,8 @@ exports.startFatProcessTimePeriod = functions.firestore
                   } else if (processIsRunning) {
                     admin.firestore().collection("A_companyData")
                     .doc(snap.data().company_id)
+                    .collection("fatReportData")
+                    .doc(snap.data().fat_report_id)
                     .collection("fatData")
                     .doc(snap.data().fat_id)
                     .collection("table")
@@ -84,6 +88,8 @@ exports.startFatProcessTimePeriod = functions.firestore
                   flagCross = false;
                   admin.firestore().collection("A_companyData")
                   .doc(snap.data().company_id)
+                  .collection("fatReportData")
+                  .doc(snap.data().fat_report_id)
                   .collection("fatData")
                   .doc(snap.data().fat_id)
                   .collection("table")
@@ -106,10 +112,12 @@ exports.startFatProcessTimePeriod = functions.firestore
 
 
 // read value of Fat
-function fatDataGetter(companyId , fatId, tableId) {
+function fatDataGetter(companyId , reportId, fatId, tableId) {
   const data = admin.firestore()
       .collection("A_companyData")
       .doc(companyId)
+      .collection("fatReportData")
+      .doc(reportId)
       .collection("fatData")
       .doc(fatId)
       .collection("table")
@@ -140,7 +148,7 @@ exports.startFatProcessWaitFunction = functions.firestore
       // });
           functions.logger.log("process started 3");
           // TimeOut start
-          fatDataGetter(snap.data().company_id ,snap.data().fat_id, snap.data().table_id).then((data) => {
+          fatDataGetter(snap.data().company_id, snap.data().fat_report_id, snap.data().fat_id, snap.data().table_id).then((data) => {
               setTimeout(() => {
                 admin.firestore().collection("A_companyData")
                 .doc(snap.data().company_id)
@@ -152,6 +160,8 @@ exports.startFatProcessWaitFunction = functions.firestore
                     const timeCurrent2 = firestore.Timestamp.now();
                     const docRef = admin.firestore().collection("A_companyData")
                     .doc(snap.data().company_id)
+                    .collection("fatReportData")
+                    .doc(snap.data().fat_report_id)
                     .collection("fatData")
                     .doc(snap.data().fat_id)
                     .collection("table")
@@ -223,6 +233,8 @@ exports.startFatProcessWaitFunction = functions.firestore
                     if(processIsRunning) {
                     admin.firestore().collection("A_companyData")
                     .doc(snap.data().company_id)
+                    .collection("fatReportData")
+                    .doc(snap.data().fat_report_id)
                     .collection("fatData")
                     .doc(snap.data().fat_id)
                     .collection("table")
@@ -276,7 +288,7 @@ exports.startFatConditionCheckFunction = functions.firestore
       //   functions.logger.log("start time recorded2:", writeResult); /// this has no use for now but important for logs.
       // });
           functions.logger.log("process started 3");
-          fatDataGetter(snap.data().company_id, snap.data().fat_id, snap.data().table_id).then((data) => {
+          fatDataGetter(snap.data().company_id, snap.data().fat_report_id, snap.data().fat_id, snap.data().table_id).then((data) => {
               return new Promise((resolve, reject) => {
                   fatData = {...data};
                   functions.logger.log("fatData second4 :", fatData.acceptanceValue)
@@ -296,6 +308,8 @@ exports.startFatConditionCheckFunction = functions.firestore
                 
                     const docRef = admin.firestore().collection("A_companyData")
                     .doc(snap.data().company_id)
+                    .collection("fatReportData")
+                    .doc(snap.data().fat_report_id)
                     .collection("fatData")
                     .doc(snap.data().fat_id)
                     .collection("table")
