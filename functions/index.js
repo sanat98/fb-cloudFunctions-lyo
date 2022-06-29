@@ -14,6 +14,29 @@ exports.helloWorld = functions.https.onRequest((request, response) => {
 
 exports.startFatProcessTimePeriod = functions.firestore
     .document("/A_fatTriggers/time-period-fun/time-period-fun-triggers/{documentId}").onCreate((snap, context) => {
+      fatDataGetter(snap.data().company_id , snap.data().fat_report_id ,snap.data().fat_id, snap.data().table_id).then((data) => {
+        functions.logger.log("timePeriodMain has called outer (if)");
+
+        if(data.process_active === false) {
+        functions.logger.log("timePeriodMain has called (if)");
+        admin.firestore().collection("A_companyData")
+        .doc(snap.data().company_id)
+        .collection("fatReportData")
+        .doc(snap.data().fat_report_id)
+        .collection("fatData")
+        .doc(snap.data().fat_id)
+        .collection("table")
+        .doc(snap.data().table_id).update({
+          "process_active": true
+        });
+        timePeriodMain(snap, context); // this is the MAIN call
+      }
+      else{
+        functions.logger.log("timePeriodMain is allready in frogress")
+      }
+    })
+    });
+    function timePeriodMain(snap, context) {
       let startTime = firestore.Timestamp.now(); // getting time
       const startTimeOfProcess = firestore.Timestamp.now(); // getting time at start of process
       // get the current value
@@ -24,7 +47,7 @@ exports.startFatProcessTimePeriod = functions.firestore
      
           functions.logger.log("process started 3");
         
-          fatDataGetter( snap.data().company_id , snap.data().fat_report_id ,snap.data().fat_id, snap.data().table_id).then((data) => {
+          fatDataGetter( snap.data().company_id , snap.data().fat_report_id ,snap.data().fat_id, snap.data().table_id).then((data) => { // now we can remove fatDataGetter as it is called above
               return new Promise((resolve, reject) => {
                   fatData = {...data};
                   functions.logger.log("fatData second4 :", fatData.acceptanceValue)
@@ -47,13 +70,15 @@ exports.startFatProcessTimePeriod = functions.firestore
 
                   if(doc.data().value <= fatData.start) { 
                     if(!flagCross) {
-                      startTime = firestore.Timestamp.now();
+                      startTime = firestore.Timestamp.now(); // updating the startTime with time when start point reaches
                     }
                     flagCross = true;
                     
                     //// as limit has time calculation limit has reached . now have to record that time
                       
                   if ((doc.data().value === fatData.stop || doc.data().value < fatData.stop) && processIsRunning) { // this condition works
+                    let timeTakenInSec = Math.round(timeCurrent.seconds - startTime.seconds);
+                    let timeTaken = secondToFormat(timeTakenInSec); // time formater in hr:min:sec
                     admin.firestore().collection("A_companyData")
                     .doc(snap.data().company_id)
                     .collection("fatReportData")
@@ -62,14 +87,17 @@ exports.startFatProcessTimePeriod = functions.firestore
                     .doc(snap.data().fat_id)
                     .collection("table")
                     .doc(snap.data().table_id).update({
-                      "observation": "Process has copleted in " + (timeCurrent.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
+                      "observation": "Process has copleted in " + timeTaken + " with value = " + doc.data().value,
                       "dev" : "Value: " + Math.abs(doc.data().value - fatData.stop) + " and Total time: " + (timeCurrent.seconds - startTimeOfProcess.seconds),
                       "confirm": ((timeCurrent.seconds - startTime.seconds)) - (fatData.acceptanceValue*60) <= 0 ? "Yes" : "No",
+                      "process_active": false
                     });
                     functions.logger.log("fatData:if: ", fatData);
                     processIsRunning = false;
                     resolve();
                   } else if (processIsRunning) {
+                    let timeTakenInSec = Math.round(timeCurrent.seconds - startTime.seconds);
+                    let timeTaken = secondToFormat(timeTakenInSec); // time formater in hr:min:sec
                     admin.firestore().collection("A_companyData")
                     .doc(snap.data().company_id)
                     .collection("fatReportData")
@@ -78,7 +106,7 @@ exports.startFatProcessTimePeriod = functions.firestore
                     .doc(snap.data().fat_id)
                     .collection("table")
                     .doc(snap.data().table_id).update({
-                      "observation": "process is running:- " + "Time lapsed after reaching limit: " + (timeCurrent.seconds - startTime.seconds) + " sec" + " and Sensor value: " + doc.data().value,
+                      "observation": "process is running:- " + "Time lapsed after reaching limit: " + timeTaken + " sec" + " and Sensor value: " + doc.data().value,
                     });
                     functions.logger.log("fatData:else: ", fatData);
                   }
@@ -107,13 +135,14 @@ exports.startFatProcessTimePeriod = functions.firestore
       });
     })
     })
-    });
+    };
     
 
 
 // read value of Fat
 function fatDataGetter(companyId , reportId, fatId, tableId) {
-  const data = admin.firestore()
+  functions.logger.log("fatDaterGetter 1 :", companyId , reportId, fatId, tableId)
+  return data = admin.firestore()
       .collection("A_companyData")
       .doc(companyId)
       .collection("fatReportData")
@@ -125,16 +154,65 @@ function fatDataGetter(companyId , reportId, fatId, tableId) {
       .get()
       .then((doc) => {
         // console.log('Got rule: ' + doc.data().name);
-        functions.logger.log("fatdataGetter fun:", doc.data());
+        functions.logger.log("fatdataGetter 2:", doc.data());
         return doc.data();
       });
-  return data;
+  // functions.logger.log("fatDataGetter 3 :" , data);
+  // return data;
+}
+
+// second to hr:mn:sec
+ function secondToFormat(seconds){
+  let p1 = seconds % 60;
+  let p2 = Math.floor(seconds / 60);
+  let p3 = p2 % 60;
+  p2 = Math.floor(p2 / 60);
+
+//  let s = p2 + ":" + p3 + ":" + p1;
+  let s = "";
+  if (p2 != 0){
+    let hr = " " + p2 + " Hr";
+    s += hr;
+  }
+  if (p3 != 0){
+    let min = " " + p3 + " Min";
+    s += min;
+  }
+  if (p1 != 0){
+    let sec = " " + p1 + " Sec";
+    s += sec;
+  }
+  return s;
 }
 
 // //////////////////////////////////////////////////-Wait Function-////////////////////////////////////////////////////////
 
 exports.startFatProcessWaitFunction = functions.firestore
     .document("/A_fatTriggers/wait-function/wait-fun-triggers/{documentId}").onCreate((snap, context) => {
+      fatDataGetter(snap.data().company_id , snap.data().fat_report_id ,snap.data().fat_id, snap.data().table_id).then((data) => {
+        functions.logger.log("waitFunctionMain has called outer (if)");
+
+        if(data.process_active === false) {
+        functions.logger.log("waitFunctionMain has called (if)");
+        admin.firestore().collection("A_companyData")
+        .doc(snap.data().company_id)
+        .collection("fatReportData")
+        .doc(snap.data().fat_report_id)
+        .collection("fatData")
+        .doc(snap.data().fat_id)
+        .collection("table")
+        .doc(snap.data().table_id).update({
+          "process_active": true
+        });
+        waitFunctionMain(snap, context); // this is the MAIN call
+      }
+      else{
+        functions.logger.log("waitFunctionMain is allready in frogress")
+      }
+    })
+    .catch((e) => functions.logger.log('catch: ', e))
+    });
+    function waitFunctionMain(snap, context) {
       const startTime = firestore.Timestamp.now(); // getting time
       // get the current value
       // const activeProcessInfo = snap.data();
@@ -148,7 +226,7 @@ exports.startFatProcessWaitFunction = functions.firestore
       // });
           functions.logger.log("process started 3");
           // TimeOut start
-          fatDataGetter(snap.data().company_id, snap.data().fat_report_id, snap.data().fat_id, snap.data().table_id).then((data) => {
+          fatDataGetter(snap.data().company_id, snap.data().fat_report_id, snap.data().fat_id, snap.data().table_id).then((data) => { // now we can remove fatDataGetter as it is called above
               setTimeout(() => {
                 admin.firestore().collection("A_companyData")
                 .doc(snap.data().company_id)
@@ -158,6 +236,8 @@ exports.startFatProcessWaitFunction = functions.firestore
                     if (processIsRunning) {
                     functions.logger.log("time up", data.waitingTime);
                     const timeCurrent2 = firestore.Timestamp.now();
+                    let timeTakenInSec = Math.round(timeCurrent2.seconds - startTime.seconds);
+                    let timeTaken = secondToFormat(timeTakenInSec); // time formater in hr:min:sec
                     const docRef = admin.firestore().collection("A_companyData")
                     .doc(snap.data().company_id)
                     .collection("fatReportData")
@@ -168,9 +248,10 @@ exports.startFatProcessWaitFunction = functions.firestore
                     .doc(snap.data().table_id);
                     if(data.condition == 'equal' && data.acceptanceValue == doc.data().value) {
                     docRef.update({
-                      "observation": "Wait function process has copleted in " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
+                      "observation": "Wait function process has copleted in " + timeTaken + " with value = " + doc.data().value,
                       "dev" : doc.data().value - data.acceptanceValue, // stop is acceptanceValue in wait function
                       "confirm": (doc.data().value - data.acceptanceValue) == 0 ? "Yes" : "No",
+                      "process_active": false
                     });
                     functions.logger.log("fatData:setTimeoutSuccessful: ", data);
                     processIsRunning = false;
@@ -178,9 +259,10 @@ exports.startFatProcessWaitFunction = functions.firestore
                     }
                     else if(data.condition == 'less' && data.acceptanceValue < doc.data().value) {
                         docRef.update({
-                          "observation": "Wait function process has copleted in " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
+                          "observation": "Wait function process has copleted in " + timeTaken + " with value = " + doc.data().value,
                           "dev" : data.acceptanceValue - doc.data().value,
                           "confirm": doc.data().value < data.acceptanceValue ? "Yes" : "No",
+                          "process_active": false
                         });
                     functions.logger.log("fatData:setTimeoutSuccessful: ", data);
                     processIsRunning = false;
@@ -188,9 +270,10 @@ exports.startFatProcessWaitFunction = functions.firestore
                     }
                     else if(data.condition == 'great' && data.acceptanceValue < doc.data().value) {
                         docRef.update({
-                          "observation": "Wait function process has copleted in " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
+                          "observation": "Wait function process has copleted in " + timeTaken + " with value = " + doc.data().value,
                           "dev" : doc.data().value - data.acceptanceValue,
                           "confirm": doc.data().value > data.acceptanceValue ? "Yes" : "No",
+                          "process_active": false
                         });
                     functions.logger.log("fatData:setTimeoutSuccessful: ", data);
                     processIsRunning = false;
@@ -198,9 +281,10 @@ exports.startFatProcessWaitFunction = functions.firestore
                     }
                     else {
                         docRef.update({
-                          "observation": "Wait function process has copleted in " + (timeCurrent2.seconds - startTime.seconds) + " sec" + " with value = " + doc.data().value,
+                          "observation": "Wait function process has copleted in " + timeTaken + " with value = " + doc.data().value,
                           "dev" : Math.abs(doc.data().value - data.acceptanceValue), ////
                           "confirm": "No",
+                          process_active: false
                         });
                     functions.logger.log("fatData:setTimeoutSuccessful: ", data);
                     processIsRunning = false;
@@ -251,26 +335,7 @@ exports.startFatProcessWaitFunction = functions.firestore
       });
     })
     })
-    });
-    
-
-
-// read value of Fat
-// function fatDataGetter(fatId, tableId) {
-//   const data = admin.firestore()
-//       .collection("A_companyData")
-//       .doc("Arizon12345")
-//       .collection("fatData")
-//       .doc(fatId)
-//       .collection("table")
-//       .doc(tableId)
-//       .get()
-//       .then((doc) => {
-//         functions.logger.log("fatdataGetter fun:", doc.data());
-//         return doc.data();
-//       });
-//   return data;
-// }
+    };
 
 // ////////////////////////////////////////////////////////Condition Check fun-/////////////////////////////////////////////
 
