@@ -27,7 +27,9 @@ exports.startFatProcessTimePeriod = functions.firestore
         .doc(snap.data().fat_id)
         .collection("table")
         .doc(snap.data().table_id).update({
-          "process_active": true
+          "process_active": true,
+          "observation": "",
+          "dev": "",
         });
         timePeriodMain(snap, context); // this is the MAIN call
       }
@@ -69,7 +71,7 @@ exports.startFatProcessTimePeriod = functions.firestore
                       "startTime:", startTime.seconds, "timeIntervalFor:", timeIntervalFor, "fatData:", fatData, "fatData.time:", fatData.acceptanceValue);// acceptance is waittingtime
 
                   if(doc.data().value <= fatData.start) { 
-                    if(!flagCross) {
+                    if(!flagCross) { // Change it to explisit false , after discussion (also check else)
                       startTime = firestore.Timestamp.now(); // updating the startTime with time when start point reaches
                     }
                     flagCross = true;
@@ -106,14 +108,14 @@ exports.startFatProcessTimePeriod = functions.firestore
                     .doc(snap.data().fat_id)
                     .collection("table")
                     .doc(snap.data().table_id).update({
-                      "observation": "process is running:- " + "Time lapsed after reaching limit: " + timeTaken + " sec" + " and Sensor value: " + doc.data().value,
+                      "observation": "process running, value: " + doc.data().value,
                     });
                     functions.logger.log("fatData:else: ", fatData);
                   }
 
                 }
                 else {
-                  flagCross = false;
+                  flagCross = false; // 
                   admin.firestore().collection("A_companyData")
                   .doc(snap.data().company_id)
                   .collection("fatReportData")
@@ -122,7 +124,7 @@ exports.startFatProcessTimePeriod = functions.firestore
                   .doc(snap.data().fat_id)
                   .collection("table")
                   .doc(snap.data().table_id).update({
-                    "observation": "process is running:- " + " start limit has not reached. " + "Sensor value: " + doc.data().value,
+                    "observation": "process running, " + " start limit has not reached. " + "Value: " + doc.data().value,
                   });
                   functions.logger.log("fatData:else outer: ", fatData);
 
