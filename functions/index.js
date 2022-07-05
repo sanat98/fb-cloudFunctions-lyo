@@ -17,7 +17,10 @@ exports.startFatProcessTimePeriod = functions.firestore
       fatDataGetter(snap.data().company_id , snap.data().fat_report_id ,snap.data().fat_id, snap.data().table_id).then((data) => {
         functions.logger.log("timePeriodMain has called outer (if)");
 
-        if(data.process_active === false) {
+        if(data?.process_active === true) {
+        functions.logger.log("timePeriodMain is allready in frogress")  
+      }
+      else{
         functions.logger.log("timePeriodMain has called (if)");
         admin.firestore().collection("A_companyData")
         .doc(snap.data().company_id)
@@ -26,20 +29,18 @@ exports.startFatProcessTimePeriod = functions.firestore
         .collection("fatData")
         .doc(snap.data().fat_id)
         .collection("table")
-        .doc(snap.data().table_id).update({
+        .doc(snap.data().table_id).set({
           "process_active": true,
           "observation": "",
           "dev": "",
-        });
+        }, {merge: true});
         timePeriodMain(snap, context); // this is the MAIN call
-      }
-      else{
-        functions.logger.log("timePeriodMain is allready in frogress")
       }
     })
     });
     function timePeriodMain(snap, context) {
       let startTime = firestore.Timestamp.now(); // getting time
+      let startValueLimit = 0; // used in deviation
       const startTimeOfProcess = firestore.Timestamp.now(); // getting time at start of process
       // get the current value
       // const activeProcessInfo = snap.data();
@@ -73,13 +74,16 @@ exports.startFatProcessTimePeriod = functions.firestore
                   if(doc.data().value <= fatData.start) { 
                     if(!flagCross) { // Change it to explisit false , after discussion (also check else)
                       startTime = firestore.Timestamp.now(); // updating the startTime with time when start point reaches
+                      if(startValueLimit === 0) {
+                        startValueLimit = doc.data().value;
+                      }
                     }
                     flagCross = true;
                     
                     //// as limit has time calculation limit has reached . now have to record that time
                       
                   if ((doc.data().value === fatData.stop || doc.data().value < fatData.stop) && processIsRunning) { // this condition works
-                    let timeTakenInSec = Math.round(timeCurrent.seconds - startTime.seconds);
+                    let timeTakenInSec = Math.ceil(timeCurrent.seconds - startTime.seconds);
                     let timeTaken = secondToFormat(timeTakenInSec); // time formater in hr:min:sec
                     admin.firestore().collection("A_companyData")
                     .doc(snap.data().company_id)
@@ -88,17 +92,17 @@ exports.startFatProcessTimePeriod = functions.firestore
                     .collection("fatData")
                     .doc(snap.data().fat_id)
                     .collection("table")
-                    .doc(snap.data().table_id).update({
-                      "observation": "Process has copleted in " + timeTaken + " with value = " + doc.data().value,
-                      "dev" : "Value: " + Math.abs(doc.data().value - fatData.stop) + " and Total time: " + (timeCurrent.seconds - startTimeOfProcess.seconds),
+                    .doc(snap.data().table_id).set({
+                      "observation": timeTaken,
+                      "dev" : startValueLimit + " to " + doc.data().value, // "Value: " + Math.abs(doc.data().value - fatData.stop) + " and Total time: " + (timeCurrent.seconds - startTimeOfProcess.seconds),
                       "confirm": ((timeCurrent.seconds - startTime.seconds)) - (fatData.acceptanceValue*60) <= 0 ? "Yes" : "No",
                       "process_active": false
-                    });
+                    }, {merge: true});
                     functions.logger.log("fatData:if: ", fatData);
                     processIsRunning = false;
                     resolve();
                   } else if (processIsRunning) {
-                    let timeTakenInSec = Math.round(timeCurrent.seconds - startTime.seconds);
+                    let timeTakenInSec = Math.ceil(timeCurrent.seconds - startTime.seconds);
                     let timeTaken = secondToFormat(timeTakenInSec); // time formater in hr:min:sec
                     admin.firestore().collection("A_companyData")
                     .doc(snap.data().company_id)
@@ -115,7 +119,8 @@ exports.startFatProcessTimePeriod = functions.firestore
 
                 }
                 else {
-                  flagCross = false; // 
+                  flagCross = false; // start limit has not reached.
+                  startValueLimit = fatData.start;
                   admin.firestore().collection("A_companyData")
                   .doc(snap.data().company_id)
                   .collection("fatReportData")
@@ -124,7 +129,7 @@ exports.startFatProcessTimePeriod = functions.firestore
                   .doc(snap.data().fat_id)
                   .collection("table")
                   .doc(snap.data().table_id).update({
-                    "observation": "process running, " + " start limit has not reached. " + "Value: " + doc.data().value,
+                    "observation": "process running, " + "Value: " + doc.data().value,
                   });
                   functions.logger.log("fatData:else outer: ", fatData);
 
@@ -238,7 +243,7 @@ exports.startFatProcessWaitFunction = functions.firestore
                     if (processIsRunning) {
                     functions.logger.log("time up", data.waitingTime);
                     const timeCurrent2 = firestore.Timestamp.now();
-                    let timeTakenInSec = Math.round(timeCurrent2.seconds - startTime.seconds);
+                    let timeTakenInSec = Math.ceil(timeCurrent2.seconds - startTime.seconds);
                     let timeTaken = secondToFormat(timeTakenInSec); // time formater in hr:min:sec
                     const docRef = admin.firestore().collection("A_companyData")
                     .doc(snap.data().company_id)
